@@ -1,4 +1,4 @@
-# Performance Race (Görev 2.3)
+# Performance Race (Ödev 2.3)
 
 Bu proje, 5 milyon satırlık bir log dosyasında belirli bir koşulu (örn: `/api/v1/orders` içeren satırları sayma) ararken 4 farklı Python yönteminin süre ve bellek tüketimlerini karşılaştırmak için hazırlanmıştır.
 
