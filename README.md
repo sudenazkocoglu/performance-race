@@ -24,3 +24,15 @@ Dosyayı tek seferde değil, `yield` mantığıyla satır satır okur. O an sade
 
 4. **Multiprocessing (En Yavaş Yöntem):** 
 Basit string arama işlemi gibi "IO-bound" (Girdi/Çıktı ağırlıklı) ve hafif işlemlerde, süreç (process) yaratma ve süreçler arası iletişim (IPC) maliyeti asıl yapılan işten çok daha ağırdır. İşlemcileri paralel çalıştırmak için veriyi parçalayıp diğer süreçlere kopyalamak (serialization) zaman kaybettirdiği için, bu spesifik senaryoda en yavaş yöntem olmuştur. Multiprocessing, CPU-bound (yoğun matematiksel işlem gerektiren) görevler için uygundur.
+
+## Bellek ve Performans Sonuçları (Gerçek RSS Ölçümü)
+`resource` modülü (`ru_maxrss`) kullanılarak yapılan işletim sistemi seviyesindeki ölçümler sonucunda:
+
+| Yöntem | Süre (Saniye) | Zirve RSS Bellek |
+|---|---|---|
+| Polars | 1.69s | 674.93 MB |
+| Naif Döngü | 6.83s | 561.67 MB |
+| Multiprocessing | 62.45s | 323.54 MB |
+| Generator | 4.76s | 32.71 MB |
+
+*Not: İlk ölçümlerde kullanılan `tracemalloc` yalnızca Python interpreter tahsislerini gördüğü için Polars ve Multiprocessing bellekleri yansıtılmamıştı. `resource` modülü ile yapılan gerçek OS RSS ölçümünde, Polars'ın hız kazanmak için belleği nasıl yoğun kullandığı net bir şekilde görülmüştür.*

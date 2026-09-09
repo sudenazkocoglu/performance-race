@@ -1,25 +1,35 @@
 import time
-import tracemalloc
-from collections import Counter
+import resource
 import multiprocessing as mp
+from collections import Counter
 import polars as pl
 
 LOG_FILE = "server.log"
 
-def measure_performance(func, name: str):
-    tracemalloc.start()
+def _worker(func, queue):
     start_time = time.time()
-    
     result = func()
-    
     end_time = time.time()
-    current, peak = tracemalloc.get_traced_memory()
-    tracemalloc.stop()
-    
     duration = end_time - start_time
-    peak_mb = peak / (1024 * 1024)
     
-    print(f"[{name}] Done in {duration:.2f}s | Peak Memory: {peak_mb:.2f} MB")
+    # ru_maxrss işletim sisteminden (Linux/WSL üzerinde KB cinsinden) prosesin 
+    # ve çocuk süreçlerin ulaştığı zirve RAM (Resident Set Size) miktarını alır.
+    self_rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    children_rss = resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss
+    peak_mb = (self_rss + children_rss) / 1024.0
+    
+    queue.put((result, duration, peak_mb))
+
+def measure_performance(func, name: str):
+    # ru_maxrss proses ömrü boyunca artan bir yüksek su çizgisi (high-water mark) olduğundan,
+    # testlerin birbirini etkilememesi ve doğru ölçülmesi için her yöntemi izole bir süreçte çalıştırıyoruz.
+    queue = mp.Queue()
+    p = mp.Process(target=_worker, args=(func, queue))
+    p.start()
+    result, duration, peak_mb = queue.get()
+    p.join()
+    
+    print(f"[{name}] Done in {duration:.2f}s | Peak RSS Memory: {peak_mb:.2f} MB")
     return result, duration, peak_mb
 
 # (a) Naif Satır Döngüsü (Tüm satırları RAM'e yükler)
@@ -64,13 +74,12 @@ def approach_multiprocessing():
 
 # (d) Polars (Rust tabanlı vektörel işlem)
 def approach_polars():
-    # Metin dosyalarını satır satır okumak için en güvenli Polars yöntemi
     df = pl.scan_csv(LOG_FILE, has_header=False, separator="\x00", infer_schema_length=0)
     result = df.filter(pl.col("column_1").str.contains("/api/v1/orders")).select(pl.count()).collect()
     return result.item(0, 0)
 
 if __name__ == "__main__":
-    print("Starting Performance Benchmark...")
+    print("Starting Performance Benchmark (OS RSS Memory via resource)...")
     
     print("\n--- Running Approach A (Naive) ---")
     _, t_naive, m_naive = measure_performance(approach_naive, "Naive Loop")
